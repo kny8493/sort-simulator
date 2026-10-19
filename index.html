@@ -1,0 +1,669 @@
+<title>정렬·탐색 시뮬레이터</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 왼쪽은 모눈종이 위에서 막대가 움직이는 무대, 오른쪽은 데이터 입력과 단계 기록 노트 */
+:root{
+  --bg:#EAF0F6; --surface:#FFFFFF; --surface2:#F2F6FA; --ink:#132036; --ink2:#566882; --line:#D3DCE8;
+  --accent:#1E4FD6; --accent-fg:#FFFFFF; --grid:#E1E9F2; --bar:#9FB3CB;
+  --cmp:#F2B33D; --swp:#E5484D; --ok:#27A56A; --min:#2F7DF6; --cur:#14A5A5;
+  --f-display:"Do Hyeon","Noto Sans KR",sans-serif;
+  --f-body:"Noto Sans KR",system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1520; --surface:#152233; --surface2:#1B2B3F; --ink:#E8EEF6; --ink2:#9DB0C7; --line:#2A3C54;
+    --accent:#7BA3FF; --accent-fg:#0B1424; --grid:#1F3047; --bar:#587392;
+    --cmp:#F2B94B; --swp:#FF6B6F; --ok:#3CC283; --min:#5E9BFF; --cur:#2CC4C4;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1520; --surface:#152233; --surface2:#1B2B3F; --ink:#E8EEF6; --ink2:#9DB0C7; --line:#2A3C54;
+  --accent:#7BA3FF; --accent-fg:#0B1424; --grid:#1F3047; --bar:#587392;
+  --cmp:#F2B94B; --swp:#FF6B6F; --ok:#3CC283; --min:#5E9BFF; --cur:#2CC4C4;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px}
+button,input{font-family:inherit}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3,p{margin:0}
+h1{font:400 clamp(26px,4vw,34px)/1.15 var(--f-display);letter-spacing:.01em;text-wrap:balance}
+h2{font:700 15px/1.3 var(--f-body)}
+.kicker{font-size:12.5px;color:var(--ink2);letter-spacing:.04em;margin-bottom:4px}
+.kicker b{color:var(--accent);font-size:inherit;font-weight:700}
+.top{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.modes{display:inline-flex;padding:4px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.modes button{border:0;background:transparent;color:var(--ink2);padding:8px 26px;border-radius:9px;font:700 15px var(--f-body);cursor:pointer}
+.modes button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media (max-width:940px){.layout{grid-template-columns:minmax(0,1fr)}}
+.col-main,.col-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.algos{display:flex;flex-wrap:wrap;gap:8px}
+.algos button{padding:9px 18px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:500 14.5px var(--f-body);cursor:pointer}
+.algos button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-fg);font-weight:700}
+
+/* 무대 */
+.meter{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.stat{display:flex;flex-direction:column;gap:2px;padding:8px 16px 6px;border-radius:10px;background:var(--surface2);min-width:120px}
+.stat span{font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.stat span::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--d,var(--line))}
+.stat.c{--d:var(--cmp)} .stat.s{--d:var(--swp)}
+.stat b{font:400 38px/1.1 var(--f-display);font-variant-numeric:tabular-nums;display:inline-block;transform-origin:left center}
+.stat b.bump{animation:bump .35s ease}
+@keyframes bump{40%{transform:scale(1.22)}}
+.stat.p b{font-size:22px;line-height:1.7}
+.pass{margin-left:auto;align-self:center;font:600 13px var(--f-body);color:var(--ink2)}
+.stage{--n:5}
+.chart{position:relative;height:clamp(220px,38vh,330px);margin-top:14px;border-bottom:3px solid var(--ink);border-radius:8px 8px 0 0;
+  background-color:var(--surface);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;--dur:.4s}
+.b{--c:var(--bar);position:absolute;top:0;bottom:0;left:0;width:calc(100% / var(--n));display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  transform:translate(calc(var(--i) * 100%),var(--lift,0px));transition:transform var(--dur) ease,opacity .25s}
+.b .v{height:30px;display:flex;align-items:flex-end;padding-bottom:5px;font:600 14px var(--f-mono);font-variant-numeric:tabular-nums}
+.b .bar{display:block;width:min(72%,64px);height:calc((100% - 30px) * var(--h));background:var(--c);border-radius:6px 6px 0 0;transition:background .2s}
+[data-role="cmp"],[data-role="mid"]{--c:var(--cmp)}
+[data-role="swp"]{--c:var(--swp);--lift:-14px}
+[data-role="min"]{--c:var(--min)}
+[data-role="cur"]{--c:var(--cur);--lift:-8px}
+[data-role="sorted"],[data-role="found"]{--c:var(--ok)}
+[data-role="ptr"]{--c:var(--ink2)}
+.b[data-role="out"]{opacity:.28}
+.b[data-role="found"] .bar{outline:3px solid var(--ok);outline-offset:3px}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:var(--ink2)}
+.tags{display:grid;grid-template-columns:repeat(var(--n),1fr);margin-top:6px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:48px;min-width:0}
+.cell em{font:600 12px var(--f-mono);color:var(--ink2);font-style:normal}
+.tl{display:flex;flex-direction:column;align-items:center;gap:3px}
+.tg{padding:0 6px;border-radius:99px;border:1.5px solid var(--c,var(--line));background:var(--surface);font-size:10.5px;line-height:16px;white-space:nowrap}
+.caption{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--surface2);display:flex;gap:10px;align-items:flex-start;min-height:66px}
+.caption p{font-size:15.5px;line-height:1.55;min-width:0}
+.pill{flex:none;padding:1px 10px;border-radius:99px;font:700 12px/20px var(--f-body);border:1.5px solid var(--c,var(--line));background:var(--surface);white-space:nowrap}
+.pill[data-k="compare"],.pill[data-k="mid"]{--c:var(--cmp)}
+.pill[data-k="swap"],.pill[data-k="miss"]{--c:var(--swp)}
+.pill[data-k="select"]{--c:var(--min)}
+.pill[data-k="pick"],.pill[data-k="insert"]{--c:var(--cur)}
+.pill[data-k="pass"],.pill[data-k="done"],.pill[data-k="found"]{--c:var(--ok)}
+.pill[data-k="skip"]{--c:var(--bar)}
+.notice{margin-top:12px;padding:12px 14px;border-radius:10px;border:1.5px solid var(--cmp);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.btn{display:inline-flex;gap:7px;align-items:center;padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 14px var(--f-body);cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:700;min-width:112px;justify-content:center}
+.btn svg{width:14px;height:14px;fill:currentColor}
+.btn.sm{padding:6px 11px;font-size:13px}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.speed{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
+.speed input{width:110px;accent-color:var(--accent)}
+
+/* 설명 + 비교표 */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.rules{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;counter-reset:r}
+.rules li{counter-increment:r;padding:8px 10px 8px 38px;border-radius:9px;position:relative;font-size:14px;line-height:1.5;transition:background .2s}
+.rules li::before{content:counter(r);position:absolute;left:10px;top:8px;width:20px;height:20px;border-radius:50%;background:var(--surface2);border:1px solid var(--line);font:600 12px/18px var(--f-mono);text-align:center}
+.rules li.on{background:color-mix(in srgb,var(--accent) 15%,transparent)}
+.rules li.on::before{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tbl{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+.tbl th,.tbl td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+.tbl th{font-size:12.5px;color:var(--ink2);font-weight:500}
+.tbl td.n{font:600 15px var(--f-mono);font-variant-numeric:tabular-nums}
+.tbl tr.me{background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.note{margin-top:10px;font-size:13px;color:var(--ink2)}
+
+/* 데이터 입력 */
+.dhead{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.badge{font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px;background:var(--cmp);color:#1B1300}
+.chips{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px;min-height:34px}
+.chip{display:inline-flex;align-items:center;gap:2px;padding:3px 4px 3px 11px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);font:600 14px var(--f-mono)}
+.chip button{border:0;background:transparent;color:var(--ink2);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1}
+.chip button:hover{background:var(--line);color:var(--ink)}
+.none{color:var(--ink2);font-size:13.5px;align-self:center}
+.add{display:flex;gap:8px;margin-top:10px}
+.add input,.tgt input{flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 15px var(--f-mono)}
+.hint{margin-top:8px;font-size:12.5px;color:var(--ink2)}
+.hint.err{color:var(--swp);font-weight:500}
+.drow{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.tgt{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:10px}
+.tgt label{font-weight:700;font-size:14px;white-space:nowrap}
+.tgt input{max-width:130px}
+
+/* 기록 */
+.hist{list-style:none;margin:10px 0 0;padding:0;max-height:420px;overflow:auto;position:relative;display:flex;flex-direction:column;gap:4px}
+.hist li{padding:8px 10px;border-radius:9px;border:1px solid transparent;cursor:pointer;font-size:13.5px;line-height:1.45}
+.hist li:hover{background:var(--surface2)}
+.hist li.cur{background:color-mix(in srgb,var(--accent) 14%,transparent);border-color:var(--accent)}
+.hl{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.hl .no{font:600 12px var(--f-mono);color:var(--ink2);min-width:22px}
+.hl .ct{margin-left:auto;font:500 12px var(--f-mono);color:var(--ink2);white-space:nowrap}
+.hist .pill{font-size:11px;line-height:17px;padding:0 8px}
+.hist-empty{color:var(--ink2);font-size:13.5px;margin-top:10px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion:reduce){.b{transition:none}.stat b.bump{animation:none}}
+@media (max-width:520px){.speed{margin-left:0;width:100%}.btn{padding:9px 11px}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="kicker">토평고등학교 · 정보 3. 알고리즘과 프로그래밍 · <b>나영T</b></p>
+      <h1>정렬·탐색 시뮬레이터</h1>
+    </div>
+    <div class="modes" role="tablist" aria-label="단원 선택">
+      <button type="button" role="tab" data-mode="sort" aria-selected="true">정렬</button>
+      <button type="button" role="tab" data-mode="search" aria-selected="false">탐색</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="col-main">
+      <div class="algos" id="algos" role="group" aria-label="알고리즘 선택"></div>
+
+      <section class="card stage" id="stage" aria-label="시뮬레이션 화면">
+        <div class="meter">
+          <div class="stat c"><span id="lCmp">비교 횟수</span><b id="cCmp">0</b></div>
+          <div class="stat s" id="statS"><span>교환 횟수</span><b id="cSwp">0</b></div>
+          <div class="stat p"><span>진행 단계</span><b id="cStep">0 / 0</b></div>
+          <div class="pass" id="passLabel"></div>
+        </div>
+        <div class="chart" id="chart"></div>
+        <div class="tags" id="tags"></div>
+        <div class="caption" aria-live="polite">
+          <span class="pill" id="capPill" data-k="init">시작</span>
+          <p id="capText"></p>
+        </div>
+        <div class="notice" id="notice" hidden>
+          <span>이분 탐색은 데이터가 작은 값부터 정렬되어 있어야 해요.</span>
+          <button type="button" class="btn sm" id="btnSortData">오름차순으로 정렬하기</button>
+        </div>
+        <div class="controls">
+          <button type="button" class="btn" id="bFirst"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5l-9 7 9 7z"/></svg>처음</button>
+          <button type="button" class="btn" id="bPrev"><svg viewBox="0 0 24 24"><path d="M15 5l-8 7 8 7z"/></svg>이전</button>
+          <button type="button" class="btn primary" id="bPlay"></button>
+          <button type="button" class="btn" id="bNext">다음<svg viewBox="0 0 24 24"><path d="M9 5l8 7-8 7z"/></svg></button>
+          <button type="button" class="btn" id="bLast">끝<svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l9 7-9 7z"/></svg></button>
+          <label class="speed">느림<input type="range" id="speed" min="1" max="10" value="4" aria-label="재생 속도">빠름</label>
+        </div>
+      </section>
+
+      <div class="two">
+        <section class="card">
+          <h2 id="rulesTitle">알고리즘 순서</h2>
+          <ol class="rules" id="rules"></ol>
+        </section>
+        <section class="card">
+          <h2 id="cmpTitle">같은 데이터, 다른 횟수</h2>
+          <table class="tbl" id="cmpTbl"></table>
+          <p class="note" id="cmpNote"></p>
+        </section>
+      </div>
+    </main>
+
+    <aside class="col-side">
+      <section class="card">
+        <div class="dhead"><h2 id="dataTitle">정렬할 데이터</h2><span class="badge" id="exBadge">예시 데이터</span></div>
+        <ul class="chips" id="chips"></ul>
+        <form class="add" id="addForm" autocomplete="off">
+          <input id="numIn" type="text" inputmode="text" placeholder="예: 170, 165, 182" aria-label="숫자 입력">
+          <button type="submit" class="btn primary" style="min-width:0">추가</button>
+        </form>
+        <p class="hint" id="hint"></p>
+        <div class="drow">
+          <button type="button" class="btn sm" id="btnEx">예시 데이터</button>
+          <button type="button" class="btn sm" id="btnRand">무작위 만들기</button>
+          <button type="button" class="btn sm" id="btnClear">모두 지우기</button>
+        </div>
+        <div class="tgt" id="tgtBox" hidden>
+          <label for="target">찾을 값</label>
+          <input id="target" type="number" min="0" max="999" value="178">
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>단계 기록</h2>
+        <p class="note" style="margin-top:4px">항목을 누르면 그 단계로 돌아가요.</p>
+        <ol class="hist" id="hist"></ol>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var EX={sort:[178,167,152,185,165],search:[140,145,152,165,167,178,180,185,198]};
+var MAXN=12;
+var ALGOS={
+  sort:[{k:'bubble',n:'버블 정렬'},{k:'selection',n:'선택 정렬'},{k:'insertion',n:'삽입 정렬'}],
+  search:[{k:'seq',n:'순차 탐색'},{k:'bin',n:'이분 탐색'}]
+};
+var RULES={
+  bubble:[
+    '맨 왼쪽부터 시작해 첫 번째 값부터 마지막 값까지 인접한 두 값을 차례로 비교한다.',
+    '두 값의 순서가 맞지 않으면 두 데이터의 위치를 교환한다.',
+    '끝까지 비교하면 가장 큰 값이 맨 오른쪽에 자리 잡는다. 큰 값부터 정렬이 이루어진다.',
+    '1~3 과정을 반복해 주어진 데이터를 정렬한다.'],
+  selection:[
+    '정렬되지 않은 맨 왼쪽부터 오른쪽으로 이동하면서 배열의 각 위치를 차례로 선택한다.',
+    '현재 위치부터 오른쪽으로 이동하며 값을 비교해 가장 작은 값(최솟값)을 찾는다.',
+    '찾은 최솟값을 현재 위치의 값과 교환한다. 가장 작은 값부터 정렬된다.',
+    '1~3 과정을 반복해 주어진 데이터를 정렬한다.'],
+  insertion:[
+    '정렬되지 않은 맨 왼쪽 값(현재 값)을 골라 삽입할 위치를 찾는다.',
+    '정렬된 값 중 큰 값부터 작은 값 순서로 하나씩 현재 값과 비교한다.',
+    '현재 값보다 작거나 같은 값이 나오면 그 값의 오른쪽에 현재 값을 삽입한다.',
+    '정렬된 모든 값을 비교했다면 맨 앞에 현재 값을 삽입한다.',
+    '1~4 과정을 반복해 주어진 데이터를 정렬한다.'],
+  seq:[
+    '배열의 맨 왼쪽 데이터부터 탐색을 시작한다.',
+    '현재 확인하는 데이터가 찾는 데이터라면 탐색을 종료한다.',
+    '찾는 데이터가 아니라면 오른쪽 데이터로 넘어간다.',
+    '2~3 단계를 반복하고, 모든 데이터를 확인하면 탐색을 종료한다.'],
+  bin:[
+    '중간 데이터부터 탐색한다. 데이터 수가 짝수이면 가운데 두 값 중 왼쪽 값을 고른다.',
+    '현재 확인하는 데이터가 찾는 데이터라면 탐색을 종료한다.',
+    '현재 데이터가 찾는 값보다 작으면 오른쪽, 크면 왼쪽으로 탐색 범위를 좁힌다.',
+    '1~3 단계를 반복하고, 더 확인할 데이터가 없으면 탐색을 종료한다.']
+};
+var TYPES={init:'시작',compare:'비교',swap:'교환',select:'선택',pick:'선택',insert:'삽입',skip:'유지',pass:'회전 끝',done:'완료',found:'성공',miss:'실패'};
+var ROLE_LABEL={cmp:'비교',swp:'교환',min:'최솟값',cur:'현재값',found:'찾음'};
+
+//<gen>
+function genSort(kind, vals){
+  var a=vals.map(function(v,i){return {id:i,v:v}});
+  var F=[], c=0, s=0, ok={}, n=a.length;
+  function snap(type,msg,hl,rule,pass){
+    var roles={}, k;
+    for(k in ok) roles[k]='sorted';
+    for(k in hl) roles[k]=hl[k];
+    F.push({type:type,msg:msg,order:a.map(function(x){return x.id}),roles:roles,c:c,s:s,rule:rule,pass:pass||'',ptr:null});
+  }
+  if(!n) return F;
+  var i,j,x,y;
+  if(kind==='bubble'){
+    snap('init','시작: ['+vals.join(', ')+'] 맨 왼쪽부터 이웃한 두 값을 비교해 나갑니다.',{},0);
+    for(i=0;i<n-1;i++){
+      var pass=(i+1)+'회전';
+      for(j=0;j<n-1-i;j++){
+        x=a[j]; y=a[j+1]; c++;
+        var bad=x.v>y.v, h={}; h[x.id]='cmp'; h[y.id]='cmp';
+        snap('compare',x.v+', '+y.v+' 비교 → '+(bad?x.v+' > '+y.v+' 이므로 순서가 맞지 않아 교환해야 함':x.v+' ≤ '+y.v+' 이므로 그대로 둠'),h,0,pass);
+        if(bad){
+          a[j]=y; a[j+1]=x; s++;
+          var h2={}; h2[x.id]='swp'; h2[y.id]='swp';
+          snap('swap',x.v+' 와 '+y.v+' 의 위치를 교환',h2,1,pass);
+        }
+      }
+      var last=a[n-1-i]; ok[last.id]=1;
+      snap('pass',(i+1)+'회전 끝: 가장 큰 값 '+last.v+' 이(가) 오른쪽 끝에 자리 잡음',{},2,pass);
+    }
+    ok[a[0].id]=1;
+  } else if(kind==='selection'){
+    snap('init','시작: ['+vals.join(', ')+'] 왼쪽 자리부터 차례로 선택해 그 자리에 올 최솟값을 찾습니다.',{},0);
+    for(i=0;i<n-1;i++){
+      var m=i, ps=(i+1)+'회전', h0={};
+      h0[a[i].id]='min';
+      snap('select',i+'번 자리 선택. 일단 '+a[i].v+' 을(를) 최솟값 후보로 둠',h0,0,ps);
+      for(j=i+1;j<n;j++){
+        c++;
+        var less=a[j].v<a[m].v, hh={};
+        hh[a[m].id]='min'; hh[a[j].id]='cmp';
+        snap('compare',a[j].v+' 와 최솟값 후보 '+a[m].v+' 비교 → '+(less?a[j].v+' 이(가) 더 작으므로 후보 교체':'후보 그대로 유지'),hh,1,ps);
+        if(less) m=j;
+      }
+      if(m!==i){
+        var hs={}; hs[a[m].id]='min'; hs[a[i].id]='cur';
+        snap('select','최솟값은 '+a[m].v+' → '+i+'번 자리의 '+a[i].v+' 와 교환할 차례',hs,2,ps);
+        x=a[i]; y=a[m]; a[i]=y; a[m]=x; s++; ok[y.id]=1;
+        var hw={}; hw[x.id]='swp'; hw[y.id]='swp';
+        snap('swap',y.v+' 와 '+x.v+' 의 위치를 교환',hw,2,ps);
+      } else {
+        ok[a[i].id]=1;
+        var hk={}; hk[a[i].id]='min';
+        snap('skip','최솟값 '+a[i].v+' 이(가) 이미 '+i+'번 자리에 있어 교환하지 않음',hk,2,ps);
+      }
+    }
+    ok[a[n-1].id]=1;
+  } else {
+    ok[a[0].id]=1;
+    snap('init','시작: ['+vals.join(', ')+'] 첫 번째 값 '+a[0].v+' 은(는) 혼자라서 이미 정렬된 것으로 봅니다.',{},0);
+    for(i=1;i<n;i++){
+      var cur=a[i], pp=i+'회전', hp={};
+      hp[cur.id]='cur';
+      snap('pick',cur.v+' 을(를) 현재 값으로 선택. 앞의 정렬된 '+i+'개와 비교해 삽입할 자리를 찾음',hp,0,pp);
+      j=i-1;
+      while(j>=0){
+        c++;
+        var big=a[j].v>cur.v, hc={};
+        hc[a[j].id]='cmp'; hc[cur.id]='cur';
+        snap('compare',a[j].v+' 와 현재 값 '+cur.v+' 비교 → '+(big?a[j].v+' > '+cur.v+' 이므로 현재 값을 한 칸 왼쪽으로 이동(교환)':a[j].v+' ≤ '+cur.v+' 이므로 이 값의 오른쪽에 삽입'),hc,1,pp);
+        if(!big) break;
+        a[j+1]=a[j]; a[j]=cur; s++;
+        var hx={}; hx[cur.id]='swp'; hx[a[j+1].id]='swp';
+        snap('swap',cur.v+' 이(가) '+a[j+1].v+' 와 자리를 바꿔 한 칸 왼쪽으로 이동',hx,1,pp);
+        j--;
+      }
+      ok[cur.id]=1;
+      var hi={}; hi[cur.id]='cur';
+      snap('insert',j<0?'정렬된 값을 모두 비교함 → 맨 앞(0번)에 '+cur.v+' 삽입':cur.v+' 을(를) '+(j+1)+'번 자리에 삽입 (앞 '+i+'개 + 1 = 정렬된 구간 '+(i+1)+'개)',hi,j<0?3:2,pp);
+    }
+  }
+  snap('done','정렬 완료! 결과: ['+a.map(function(z){return z.v}).join(', ')+'] · 비교 '+c+'회, 교환 '+s+'회',{},kind==='insertion'?4:3);
+  return F;
+}
+
+function genSearch(kind, vals, t){
+  var a=vals.map(function(v,i){return {id:i,v:v}});
+  var F=[], c=0, n=a.length, k;
+  function snap(type,msg,roles,rule,ptr){
+    F.push({type:type,msg:msg,order:a.map(function(x){return x.id}),roles:roles,c:c,s:0,rule:rule,pass:'',ptr:ptr||null});
+  }
+  if(!n) return F;
+  var i;
+  if(kind==='seq'){
+    snap('init','찾을 값 '+t+'. 맨 왼쪽(0번)부터 차례로 확인합니다.',{},0);
+    var seen={};
+    for(i=0;i<n;i++){
+      c++;
+      var hit=a[i].v===t, r={};
+      for(k in seen) r[k]='out';
+      r[a[i].id]=hit?'found':'cmp';
+      if(hit){
+        snap('found',i+'번 값 '+a[i].v+' = '+t+' → 찾았습니다! (탐색 '+c+'회)',r,1);
+        return F;
+      }
+      snap('compare',i+'번 값 '+a[i].v+' ≠ '+t+' → 찾는 값이 아니므로 오른쪽으로 이동',r,2);
+      seen[a[i].id]=1;
+    }
+    var rr={}; for(k in seen) rr[k]='out';
+    snap('miss','끝까지 모두 확인했지만 '+t+' 은(는) 없습니다. (탐색 '+c+'회)',rr,3);
+  } else {
+    var l=0, r2=n-1, p0={}; p0[0]=['L']; p0[n-1]=(p0[n-1]||[]).concat(['R']);
+    snap('init','찾을 값 '+t+'. 전체 구간(0~'+(n-1)+'번)에서 시작합니다.',{},0,p0);
+    while(l<=r2){
+      var m=(l+r2)>>1; c++;
+      var roles={}, ptr={};
+      for(i=0;i<n;i++) if(i<l||i>r2) roles[a[i].id]='out';
+      function put(ix,lb){(ptr[ix]=ptr[ix]||[]).push(lb)}
+      put(l,'L'); put(m,'M'); put(r2,'R');
+      var eq=a[m].v===t;
+      roles[a[m].id]=eq?'found':'mid';
+      if(eq){
+        snap('found','중간 '+m+'번 값 '+a[m].v+' = '+t+' → 찾았습니다! (탐색 '+c+'회)',roles,1,ptr);
+        return F;
+      }
+      var small=a[m].v<t;
+      snap('compare','중간 '+m+'번 값 '+a[m].v+(small?' < ':' > ')+t+' → '+(small?'찾는 값은 오른쪽 구간 (L = '+(m+1)+')':'찾는 값은 왼쪽 구간 (R = '+(m-1)+')'),roles,2,ptr);
+      if(small) l=m+1; else r2=m-1;
+    }
+    var ro={}; for(i=0;i<n;i++) ro[a[i].id]='out';
+    snap('miss','더 확인할 구간이 없어 탐색 종료: '+t+' 은(는) 없습니다. (탐색 '+c+'회)',ro,3);
+  }
+  return F;
+}
+function isSorted(a){for(var i=1;i<a.length;i++) if(a[i-1]>a[i]) return false; return true}
+//</gen>
+
+var S={
+  mode:'sort',
+  algo:{sort:'bubble',search:'seq'},
+  data:{sort:EX.sort.slice(),search:EX.search.slice()},
+  ex:{sort:true,search:true},
+  target:178,
+  frames:[],pos:0,playing:false,timer:null,blocked:false,speed:4,els:[]
+};
+var MS=[2200,1600,1200,900,700,520,380,260,180,110];
+function ms(){return MS[S.speed-1]}
+var chart=$('#chart'), tagsEl=$('#tags'), stage=$('#stage');
+var ICON_PLAY='<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>재생';
+var ICON_PAUSE='<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>일시정지';
+
+function buildChart(){
+  var vals=S.data[S.mode], n=vals.length;
+  stage.style.setProperty('--n',Math.max(n,1));
+  chart.innerHTML=''; tagsEl.innerHTML=''; S.els=[];
+  if(!n){
+    chart.innerHTML='<div class="empty"><p>오른쪽에서 숫자를 입력하면<br>여기에 막대로 나타나요.</p></div>';
+    return;
+  }
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  vals.forEach(function(v,i){
+    var h=mx===mn?0.7:0.25+0.75*(v-mn)/(mx-mn);
+    var w=document.createElement('div');
+    w.className='b'; w.dataset.role='n';
+    w.style.setProperty('--i',i); w.style.setProperty('--h',h.toFixed(3));
+    w.innerHTML='<span class="v">'+v+'</span><i class="bar"></i>';
+    chart.appendChild(w); S.els.push(w);
+    var cell=document.createElement('div');
+    cell.className='cell';
+    cell.innerHTML='<em>'+i+'</em><div class="tl"></div>';
+    tagsEl.appendChild(cell);
+  });
+}
+
+function show(){
+  var f=S.frames[S.pos], last=S.frames.length-1;
+  var n=S.data[S.mode].length, isS=S.mode==='search';
+  $('#lCmp').textContent=isS?'탐색 횟수':'비교 횟수';
+  $('#statS').hidden=isS;
+  chart.style.setProperty('--dur',Math.min(ms()*0.7,450)+'ms');
+  $('#notice').hidden=!S.blocked;
+  var dis=!f||S.blocked;
+  $('#bFirst').disabled=dis||S.pos===0;
+  $('#bPrev').disabled=dis||S.pos===0;
+  $('#bNext').disabled=dis||S.pos>=last;
+  $('#bLast').disabled=dis||S.pos>=last;
+  $('#bPlay').disabled=dis;
+  $('#bPlay').innerHTML=S.playing?ICON_PAUSE:(S.pos>=last&&last>0?ICON_PLAY.replace('재생','다시 재생'):ICON_PLAY);
+  if(!f){
+    setCount('#cCmp',0); setCount('#cSwp',0);
+    $('#cStep').textContent='0 / 0'; $('#passLabel').textContent='';
+    var msg=n===0?'데이터가 비어 있어요. 숫자를 입력하거나 예시 데이터를 불러오세요.':'찾을 값을 입력해 주세요.';
+    $('#capText').textContent=msg; setPill('init');
+    renderHist(); return;
+  }
+  var idx={}; f.order.forEach(function(id,i){idx[id]=i});
+  S.els.forEach(function(el,id){
+    el.style.setProperty('--i',idx[id]);
+    el.dataset.role=f.roles[id]||'n';
+  });
+  var cells=tagsEl.children;
+  for(var i=0;i<cells.length;i++){
+    var role=f.roles[f.order[i]], html='';
+    if(ROLE_LABEL[role]) html+='<span class="tg" data-role="'+role+'">'+(isS&&role==='cmp'?'확인':ROLE_LABEL[role])+'</span>';
+    if(f.ptr&&f.ptr[i]) f.ptr[i].forEach(function(p){html+='<span class="tg" data-role="ptr">'+p+'</span>'});
+    cells[i].lastChild.innerHTML=html;
+  }
+  setCount('#cCmp',f.c); setCount('#cSwp',f.s);
+  $('#cStep').textContent=S.pos+' / '+last;
+  $('#passLabel').textContent=f.pass;
+  $('#capText').textContent=f.msg; setPill(f.type);
+  var lis=document.querySelectorAll('#rules li');
+  for(var r=0;r<lis.length;r++) lis[r].classList.toggle('on',r===f.rule);
+  renderHist();
+}
+function setCount(sel,v){
+  var el=$(sel);
+  if(String(v)!==el.textContent){
+    el.textContent=v; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  }
+}
+function typeLabel(t){return S.mode==='search'&&t==='compare'?'확인':(TYPES[t]||'')}
+function setPill(t){var p=$('#capPill'); p.dataset.k=t; p.textContent=typeLabel(t)}
+
+function renderHist(){
+  var ol=$('#hist');
+  if(!S.frames.length){ol.innerHTML='<li class="hist-empty" style="cursor:default">아직 기록이 없어요.</li>';return}
+  var out='';
+  for(var i=0;i<=S.pos;i++){
+    var x=S.frames[i];
+    out+='<li data-i="'+i+'" class="'+(i===S.pos?'cur':'')+'"><div class="hl"><span class="no">'+i+'</span><span class="pill" data-k="'+x.type+'">'+typeLabel(x.type)+'</span><span class="ct">'+(S.mode==='search'?'탐색 '+x.c+'회':'비교 '+x.c+' · 교환 '+x.s)+'</span></div><div>'+x.msg+'</div></li>';
+  }
+  ol.innerHTML=out;
+  var cur=ol.lastElementChild;
+  if(cur) ol.scrollTop=Math.max(0,cur.offsetTop-ol.clientHeight+cur.offsetHeight+6);
+}
+
+function renderRules(){
+  var a=S.algo[S.mode], name=ALGOS[S.mode].filter(function(x){return x.k===a})[0].n;
+  $('#rulesTitle').textContent=name+' 순서';
+  $('#rules').innerHTML=RULES[a].map(function(t){return '<li>'+t+'</li>'}).join('');
+}
+function renderCompare(){
+  var vals=S.data[S.mode], n=vals.length, tbl=$('#cmpTbl'), note=$('#cmpNote');
+  if(!n){tbl.innerHTML='';note.textContent='데이터를 넣으면 알고리즘별 횟수를 비교해 보여줘요.';return}
+  var rows=[];
+  if(S.mode==='sort'){
+    $('#cmpTitle').textContent='같은 데이터, 다른 횟수';
+    ALGOS.sort.forEach(function(al){
+      var fr=genSort(al.k,vals), l=fr[fr.length-1];
+      rows.push([al.n,l.c,l.s,al.k===S.algo.sort]);
+    });
+    note.textContent='데이터 '+n+'개: 버블·선택 정렬은 비교를 항상 '+(n*(n-1)/2)+'회 하고, 삽입 정렬은 데이터의 처음 순서에 따라 달라져요.';
+  } else {
+    $('#cmpTitle').textContent='순차 탐색과 이분 탐색';
+    var t=S.target;
+    if(!isFinite(t)){tbl.innerHTML='';note.textContent='찾을 값을 입력하면 비교해 보여줘요.';return}
+    var sq=genSearch('seq',vals,t), ls=sq[sq.length-1];
+    rows.push(['순차 탐색',ls.c,0,S.algo.search==='seq']);
+    if(isSorted(vals)){
+      var bn=genSearch('bin',vals,t), lb=bn[bn.length-1];
+      rows.push(['이분 탐색',lb.c,0,S.algo.search==='bin']);
+    } else rows.push(['이분 탐색','정렬 필요','-',S.algo.search==='bin']);
+    note.textContent='데이터 '+n+'개: 순차 탐색은 최대 '+n+'회, 이분 탐색은 최대 '+(Math.floor(Math.log2(n))+1)+'회 탐색해요.';
+  }
+  var isSr=S.mode==='search';
+  tbl.innerHTML='<tr><th>알고리즘</th>'+(isSr?'<th>탐색 횟수</th>':'<th>비교</th><th>교환</th>')+'</tr>'+rows.map(function(r){
+    return '<tr class="'+(r[3]?'me':'')+'"><td>'+r[0]+'</td><td class="n">'+r[1]+'</td>'+(isSr?'':'<td class="n">'+r[2]+'</td>')+'</tr>';
+  }).join('');
+}
+
+function renderAlgos(){
+  $('#algos').innerHTML=ALGOS[S.mode].map(function(a){
+    return '<button type="button" data-k="'+a.k+'" aria-pressed="'+(S.algo[S.mode]===a.k)+'">'+a.n+'</button>';
+  }).join('');
+}
+function renderData(){
+  var vals=S.data[S.mode];
+  $('#dataTitle').textContent=S.mode==='sort'?'정렬할 데이터':'탐색할 데이터 (오름차순)';
+  $('#exBadge').hidden=!S.ex[S.mode];
+  $('#tgtBox').hidden=S.mode!=='search';
+  $('#chips').innerHTML=vals.length?vals.map(function(v,i){
+    return '<li class="chip"><span>'+v+'</span><button type="button" data-rm="'+i+'" aria-label="'+v+' 삭제">×</button></li>';
+  }).join(''):'<li class="none">비어 있어요. 아래에 숫자를 입력해 보세요.</li>';
+}
+function hint(msg,err){var h=$('#hint');h.textContent=msg;h.classList.toggle('err',!!err)}
+function defaultHint(){
+  hint(S.ex[S.mode]?'지금은 예시 데이터예요. "모두 지우기"를 누르고 내 데이터를 넣어 보세요.':'숫자를 쉼표나 띄어쓰기로 구분해 한 번에 여러 개 넣을 수 있어요. (0~999, 최대 '+MAXN+'개)');
+}
+
+function rebuild(){
+  stop();
+  var vals=S.data[S.mode], a=S.algo[S.mode];
+  S.blocked=false;
+  if(S.mode==='sort'){
+    S.frames=genSort(a,vals);
+  } else if(!vals.length||!isFinite(S.target)){
+    S.frames=[];
+  } else if(a==='bin'&&!isSorted(vals)){
+    S.blocked=true;
+    var f=genSearch('seq',vals,S.target)[0];
+    f.msg='이분 탐색을 하려면 데이터가 작은 값부터 순서대로 정렬되어 있어야 해요.';
+    S.frames=[f];
+  } else {
+    S.frames=genSearch(a,vals,S.target);
+  }
+  S.pos=0;
+  buildChart(); renderData(); renderRules(); renderCompare(); show();
+}
+
+function go(p){S.pos=Math.max(0,Math.min(S.frames.length-1,p)); show()}
+function stop(){S.playing=false; clearTimeout(S.timer); S.timer=null}
+function tick(){
+  if(!S.playing) return;
+  if(S.pos>=S.frames.length-1){stop();show();return}
+  go(S.pos+1);
+  if(S.pos>=S.frames.length-1){stop();show();return}
+  S.timer=setTimeout(tick,ms());
+}
+function play(){
+  if(!S.frames.length||S.blocked) return;
+  if(S.playing){stop();show();return}
+  if(S.pos>=S.frames.length-1){S.pos=0;show()}
+  S.playing=true; show();
+  S.timer=setTimeout(tick,S.pos===0?500:ms());
+}
+
+function addFromInput(){
+  var raw=$('#numIn').value.trim();
+  if(!raw) return;
+  var parts=raw.split(/[\s,;，]+/).filter(Boolean), nums=[];
+  for(var i=0;i<parts.length;i++){
+    if(!/^\d{1,3}$/.test(parts[i])){hint('0부터 999까지의 정수만 입력할 수 있어요.',true);return}
+    nums.push(+parts[i]);
+  }
+  var cur=S.data[S.mode];
+  if(cur.length+nums.length>MAXN){hint('최대 '+MAXN+'개까지 넣을 수 있어요.',true);return}
+  S.data[S.mode]=cur.concat(nums); S.ex[S.mode]=false;
+  $('#numIn').value=''; rebuild(); defaultHint(); $('#numIn').focus();
+}
+function rnd(a,b){return a+Math.floor(Math.random()*(b-a+1))}
+function randomData(){
+  var pool=[]; for(var v=140;v<=199;v++) pool.push(v);
+  for(var i=pool.length-1;i>0;i--){var j=rnd(0,i),t=pool[i];pool[i]=pool[j];pool[j]=t}
+  var arr=pool.slice(0,S.mode==='sort'?7:8);
+  if(S.mode==='search'){
+    arr.sort(function(a,b){return a-b});
+    S.target=arr[rnd(0,arr.length-1)]; $('#target').value=S.target;
+  }
+  S.data[S.mode]=arr; S.ex[S.mode]=false; rebuild(); defaultHint();
+}
+
+/* 이벤트 */
+document.querySelectorAll('.modes button').forEach(function(b){
+  b.addEventListener('click',function(){
+    S.mode=b.dataset.mode;
+    document.querySelectorAll('.modes button').forEach(function(x){x.setAttribute('aria-selected',String(x===b))});
+    renderAlgos(); rebuild(); defaultHint();
+  });
+});
+$('#algos').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  S.algo[S.mode]=b.dataset.k; renderAlgos(); rebuild();
+});
+$('#addForm').addEventListener('submit',function(e){e.preventDefault();addFromInput()});
+$('#chips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-rm]'); if(!b) return;
+  S.data[S.mode].splice(+b.dataset.rm,1); S.ex[S.mode]=false; rebuild(); defaultHint();
+});
+$('#btnEx').addEventListener('click',function(){S.data[S.mode]=EX[S.mode].slice();S.ex[S.mode]=true;if(S.mode==='search'){S.target=178;$('#target').value=178}rebuild();defaultHint()});
+$('#btnClear').addEventListener('click',function(){S.data[S.mode]=[];S.ex[S.mode]=false;rebuild();hint('데이터를 모두 지웠어요. 숫자를 입력해 보세요. 예: 170, 165, 182');$('#numIn').focus()});
+$('#btnRand').addEventListener('click',randomData);
+$('#btnSortData').addEventListener('click',function(){S.data.search.sort(function(a,b){return a-b});rebuild()});
+$('#target').addEventListener('input',function(e){
+  var v=e.target.value; S.target=v===''?NaN:+v; rebuild();
+});
+$('#hist').addEventListener('click',function(e){
+  var li=e.target.closest('li[data-i]'); if(!li) return;
+  stop(); go(+li.dataset.i);
+});
+$('#bFirst').addEventListener('click',function(){stop();go(0)});
+$('#bPrev').addEventListener('click',function(){stop();go(S.pos-1)});
+$('#bNext').addEventListener('click',function(){stop();go(S.pos+1)});
+$('#bLast').addEventListener('click',function(){stop();go(S.frames.length-1)});
+$('#bPlay').addEventListener('click',play);
+$('#speed').addEventListener('input',function(e){S.speed=+e.target.value;chart.style.setProperty('--dur',Math.min(ms()*0.7,450)+'ms')});
+document.addEventListener('keydown',function(e){
+  if(e.target!==document.body) return;
+  if(e.key==='ArrowRight'){stop();go(S.pos+1)}
+  else if(e.key==='ArrowLeft'){stop();go(S.pos-1)}
+  else if(e.key===' '){e.preventDefault();play()}
+});
+
+renderAlgos(); rebuild(); defaultHint();
+})();
+</script>
